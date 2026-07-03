@@ -74,7 +74,7 @@ function setupAuth() {
     try {
       await api.register(u, p);
       updateAuthUI();
-    } catch (e) { alert(e.message); }
+    } catch (e) { document.getElementById('auth-status').textContent = e.message; }
   });
 
   document.getElementById('auth-login-btn').addEventListener('click', async () => {
@@ -84,7 +84,7 @@ function setupAuth() {
     try {
       await api.login(u, p);
       updateAuthUI();
-    } catch (e) { alert(e.message); }
+    } catch (e) { document.getElementById('auth-status').textContent = e.message; }
   });
 
   logoutBtn.addEventListener('click', () => {
@@ -124,11 +124,7 @@ function setupLeaderboard() {
 }
 
 // ── 启动 ──
-try {
-  renderCharacterCards();
-  setupAuth();
-  setupLeaderboard();
-  initGame();
-} catch(e) {
-  console.error('[main] 初始化失败:', e.message, e.stack);
-}
+try { renderCharacterCards(); } catch(e) { console.error('[main] 角色卡片:', e.message); }
+try { setupAuth(); } catch(e) { console.error('[main] 认证:', e.message); }
+try { setupLeaderboard(); } catch(e) { console.error('[main] 排行榜:', e.message); }
+try { initGame(); } catch(e) { console.error('[main] 游戏:', e.message); }
