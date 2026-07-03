@@ -520,6 +520,19 @@ function setupInput() {
       const sx = (e.clientX - rect.left) / rect.width * VW;
       const sy = (e.clientY - rect.top) / rect.height * VH;
       placeItem(sx, sy);
+    } else if (game.isTouch && game.gameRunning) {
+      // 触屏: 右半屏按钮
+      const sx = (e.clientX - rect.left) / rect.width * VW;
+      const sy = (e.clientY - rect.top) / rect.height * VH;
+      if (sx >= VW / 2) handleTouchButton(sx, sy);
+      else if (!game.joystick.active) {
+        // 左半屏: 激活摇杆
+        game.joystick.active = true;
+        game.joystick.cx = sx;
+        game.joystick.cy = sy;
+        game.joystick.dx = 0;
+        game.joystick.dy = 0;
+      }
     }
   });
   canvas.addEventListener('pointerup', () => { mouse.down = false; });
@@ -532,11 +545,37 @@ function setupInput() {
     const sy = (e.clientY - rect.top) / rect.height * VH;
     game.mouseWorldX = sx + game.cam.x - VW/2;
     game.mouseWorldY = sy + game.cam.y - VH/2;
+    // 触屏摇杆拖动
+    if (game.joystick.active && mouse.down) {
+      let dx = sx - game.joystick.cx;
+      let dy = sy - game.joystick.cy;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      const r = game.joystick.radius;
+      if (dist > r) { dx = dx/dist*r; dy = dy/dist*r; }
+      game.joystick.dx = dx / r;
+      game.joystick.dy = dy / r;
+    }
+  });
+  canvas.addEventListener('pointerup', () => {
+    mouse.down = false;
+    if (game.joystick.active) {
+      game.joystick.active = false;
+      game.joystick.dx = 0;
+      game.joystick.dy = 0;
+    }
+  });
+  canvas.addEventListener('pointerleave', () => {
+    mouse.down = false;
+    if (game.joystick.active) {
+      game.joystick.active = false;
+      game.joystick.dx = 0;
+      game.joystick.dy = 0;
+    }
   });
 
   // ── 触屏操控 ──
-  // 检测是否触屏设备
-  game.isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+  // 检测是否触屏设备 (多种方式, 宽松检测)
+  game.isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0 || window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 768;
 
   // 虚拟摇杆: 屏幕左半区触摸激活
   canvas.addEventListener('touchstart', e => {
