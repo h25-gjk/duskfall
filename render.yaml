@@ -12,3 +12,14 @@ services:
         value: production
       - key: JWT_SECRET
         generateValue: true
+      - key: PGSSL
+        value: "true"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: duskfall-db
+          property: connectionString
+
+databases:
+  - name: duskfall-db
+    databaseName: duskfall
+    plan: free
