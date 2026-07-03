@@ -124,7 +124,21 @@ function setupLeaderboard() {
 }
 
 // ── 启动 ──
+// 手机端按钮 touchend fallback (click 在某些手机浏览器不触发)
+function enableTouchButtons() {
+  document.querySelectorAll('button, .char-card').forEach(el => {
+    if (el.dataset.touchEnabled) return;
+    el.dataset.touchEnabled = '1';
+    el.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      el.click();
+    }, { passive: false });
+  });
+}
+
 try { renderCharacterCards(); } catch(e) { console.error('[main] 角色卡片:', e.message); }
 try { setupAuth(); } catch(e) { console.error('[main] 认证:', e.message); }
 try { setupLeaderboard(); } catch(e) { console.error('[main] 排行榜:', e.message); }
 try { initGame(); } catch(e) { console.error('[main] 游戏:', e.message); }
+// 延迟绑定 touch fallback (等 DOM 完全渲染)
+setTimeout(enableTouchButtons, 100);
