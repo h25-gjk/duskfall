@@ -25,7 +25,7 @@ const game = {
   entities: [],
   particles: [],
   player: null,
-  otherPlayers: null, // Map, 联机时用
+  otherPlayers: null,
   cam: { x:0, y:0 },
   dayCount: 1,
   timeOfDay: 0,
@@ -42,6 +42,8 @@ const game = {
   DAY_LEN, DUSK_LEN, NIGHT_LEN,
   selectedCharacter: null,
   isMultiplayer: false,
+  isTouch: false, // 触屏设备
+  joystick: { active:false, id:null, cx:0, cy:0, dx:0, dy:0, radius:50 },
 
   getCharacterColors(characterId) {
     const c = getCharacter(characterId);
@@ -314,7 +316,12 @@ function update(dt) {
   if (keys['s']||keys['arrowdown']) my=1;
   if (keys['a']||keys['arrowleft']) mx=-1;
   if (keys['d']||keys['arrowright']) mx=1;
-  if (mx&&my) { mx*=0.707; my*=0.707; }
+  // 虚拟摇杆
+  if (game.joystick.active) {
+    mx = game.joystick.dx;
+    my = game.joystick.dy;
+  }
+  if (mx&&my && !game.joystick.active) { mx*=0.707; my*=0.707; }
   const speed = 120;
   const nx = p.x + mx*speed*dt;
   const ny = p.y + my*speed*dt;
@@ -526,6 +533,93 @@ function setupInput() {
     game.mouseWorldX = sx + game.cam.x - VW/2;
     game.mouseWorldY = sy + game.cam.y - VH/2;
   });
+
+  // ── 触屏操控 ──
+  // 检测是否触屏设备
+  game.isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+
+  // 虚拟摇杆: 屏幕左半区触摸激活
+  canvas.addEventListener('touchstart', e => {
+    if (!game.gameRunning) return;
+    e.preventDefault();
+    initAudio();
+    const rect = canvas.getBoundingClientRect();
+    for (const t of e.changedTouches) {
+      const x = t.clientX - rect.left;
+      const y = t.clientY - rect.top;
+      // 左半屏 = 摇杆
+      if (x < VW / 2 && !game.joystick.active) {
+        game.joystick.active = true;
+        game.joystick.id = t.identifier;
+        game.joystick.cx = x;
+        game.joystick.cy = y;
+        game.joystick.dx = 0;
+        game.joystick.dy = 0;
+      } else if (x >= VW / 2) {
+        // 右半屏 = 按钮区
+        handleTouchButton(x, y);
+      }
+    }
+  }, { passive: false });
+
+  canvas.addEventListener('touchmove', e => {
+    if (!game.gameRunning) return;
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    for (const t of e.changedTouches) {
+      if (t.identifier === game.joystick.id && game.joystick.active) {
+        const x = t.clientX - rect.left;
+        const y = t.clientY - rect.top;
+        let dx = x - game.joystick.cx;
+        let dy = y - game.joystick.cy;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        const r = game.joystick.radius;
+        if (dist > r) { dx = dx/dist*r; dy = dy/dist*r; }
+        game.joystick.dx = dx / r;
+        game.joystick.dy = dy / r;
+      }
+    }
+  }, { passive: false });
+
+  function endTouch(e) {
+    for (const t of e.changedTouches) {
+      if (t.identifier === game.joystick.id) {
+        game.joystick.active = false;
+        game.joystick.id = null;
+        game.joystick.dx = 0;
+        game.joystick.dy = 0;
+      }
+    }
+  }
+  canvas.addEventListener('touchend', endTouch, { passive: false });
+  canvas.addEventListener('touchcancel', endTouch, { passive: false });
+}
+
+// 触屏按钮处理
+function handleTouchButton(x, y) {
+  const btnY = VH - 80;
+  const btns = [
+    { id:'gather', x: VW - 160, y: btnY },
+    { id:'attack', x: VW - 100, y: btnY - 40 },
+    { id:'craft',  x: VW - 60,  y: btnY },
+  ];
+  for (const b of btns) {
+    const dx = x - b.x, dy = y - b.y;
+    if (dx*dx + dy*dy < 32*32) {
+      game.touchBtnPressed = b.id;
+      setTimeout(() => { game.touchBtnPressed = null; }, 150);
+      switch(b.id) {
+        case 'gather': tryGather(); break;
+        case 'attack': tryAttack(); break;
+        case 'craft':  toggleCraft(); break;
+      }
+      return;
+    }
+  }
+  // 没点中按钮 = 放置篝火模式时点击地图
+  if (game.placeMode) {
+    placeItem(x, y);
+  }
 }
 
 // ── 尺寸 & 主循环 ──

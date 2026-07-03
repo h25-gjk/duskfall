@@ -453,4 +453,77 @@ function renderLighting(ctx, game, cam, w, h) {
   }
 
   ctx.restore();
+
+  // ── 触屏 UI ──
+  if (game.isTouch && game.gameRunning) {
+    drawTouchUI(ctx, game, w, h);
+  }
+}
+
+function drawTouchUI(ctx, game, w, h) {
+  // 虚拟摇杆
+  const js = game.joystick;
+  if (js.active || js.id === null) {
+    // 摇杆底盘
+    const bx = js.active ? js.cx : 80;
+    const by = js.active ? js.cy : h - 80;
+    ctx.save();
+    ctx.globalAlpha = js.active ? 0.5 : 0.25;
+    ctx.fillStyle = 'rgba(10,12,24,.6)';
+    ctx.beginPath();
+    ctx.arc(bx, by, js.radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(232,213,176,.3)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    // 摇杆头
+    const hx = js.active ? bx + js.dx * js.radius : bx;
+    const hy = js.active ? by + js.dy * js.radius : by;
+    ctx.globalAlpha = 0.7;
+    ctx.fillStyle = '#E8D5B0';
+    ctx.beginPath();
+    ctx.arc(hx, hy, 18, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // 右侧按钮: 采集/合成/攻击
+  const btnY = h - 80;
+  const btns = [
+    { id:'gather', label:'采集', x: w - 160, y: btnY, color:'#4a6a3a' },
+    { id:'attack', label:'攻击', x: w - 100, y: btnY - 40, color:'#8a3a3a' },
+    { id:'craft',  label:'合成', x: w - 60,  y: btnY, color:'#3a4a6a' },
+  ];
+  for (const b of btns) {
+    ctx.save();
+    ctx.globalAlpha = 0.6;
+    ctx.fillStyle = b.color;
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, 28, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(232,213,176,.3)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#E8D5B0';
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(b.label, b.x, b.y);
+    ctx.restore();
+  }
+
+  // 按钮触摸检测 (通过 game.touchBtn 状态)
+  if (game.touchBtnPressed) {
+    const btn = btns.find(b => b.id === game.touchBtnPressed);
+    if (btn) {
+      ctx.save();
+      ctx.globalAlpha = 0.3;
+      ctx.fillStyle = '#E8D5B0';
+      ctx.beginPath();
+      ctx.arc(btn.x, btn.y, 32, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
 }
