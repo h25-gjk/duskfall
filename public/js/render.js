@@ -75,6 +75,9 @@ export function render(ctx, game, cam, VW, VH) {
     ctx.fillStyle = `rgba(180,40,40,${game.damageFlash * 0.4})`;
     ctx.fillRect(0, 0, w, h);
   }
+
+  // ── 触屏 UI (最上层, 不被光照遮挡) ──
+  drawTouchUIAfterLighting(ctx, game, w, h);
 }
 
 function drawTile(ctx, map, resData, x, y) {
@@ -453,33 +456,28 @@ function renderLighting(ctx, game, cam, w, h) {
   }
 
   ctx.restore();
-
-  // ── 触屏 UI ──
-  if (game.isTouch && game.gameRunning) {
-    drawTouchUI(ctx, game, w, h);
-  }
 }
 
-function drawTouchUI(ctx, game, w, h) {
+// 触屏 UI 必须在光照之后画, 确保永远在最上层可见
+function drawTouchUIAfterLighting(ctx, game, w, h) {
+  if (!game.isTouch || !game.gameRunning) return;
   // 虚拟摇杆
   const js = game.joystick;
   if (js.active || js.id === null) {
-    // 摇杆底盘
     const bx = js.active ? js.cx : 80;
     const by = js.active ? js.cy : h - 80;
     ctx.save();
-    ctx.globalAlpha = js.active ? 0.5 : 0.25;
-    ctx.fillStyle = 'rgba(10,12,24,.6)';
+    ctx.globalAlpha = js.active ? 0.6 : 0.35;
+    ctx.fillStyle = 'rgba(10,12,24,.7)';
     ctx.beginPath();
     ctx.arc(bx, by, js.radius, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = 'rgba(232,213,176,.3)';
+    ctx.strokeStyle = 'rgba(232,213,176,.4)';
     ctx.lineWidth = 2;
     ctx.stroke();
-    // 摇杆头
     const hx = js.active ? bx + js.dx * js.radius : bx;
     const hy = js.active ? by + js.dy * js.radius : by;
-    ctx.globalAlpha = 0.7;
+    ctx.globalAlpha = 0.8;
     ctx.fillStyle = '#E8D5B0';
     ctx.beginPath();
     ctx.arc(hx, hy, 18, 0, Math.PI * 2);
@@ -487,7 +485,7 @@ function drawTouchUI(ctx, game, w, h) {
     ctx.restore();
   }
 
-  // 右侧按钮: 采集/合成/攻击
+  // 右侧按钮
   const btnY = h - 80;
   const btns = [
     { id:'gather', label:'采集', x: w - 160, y: btnY, color:'#4a6a3a' },
@@ -496,12 +494,12 @@ function drawTouchUI(ctx, game, w, h) {
   ];
   for (const b of btns) {
     ctx.save();
-    ctx.globalAlpha = 0.6;
+    ctx.globalAlpha = 0.7;
     ctx.fillStyle = b.color;
     ctx.beginPath();
     ctx.arc(b.x, b.y, 28, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = 'rgba(232,213,176,.3)';
+    ctx.strokeStyle = 'rgba(232,213,176,.4)';
     ctx.lineWidth = 2;
     ctx.stroke();
     ctx.globalAlpha = 1;
@@ -513,12 +511,12 @@ function drawTouchUI(ctx, game, w, h) {
     ctx.restore();
   }
 
-  // 按钮触摸检测 (通过 game.touchBtn 状态)
+  // 按钮按下高亮
   if (game.touchBtnPressed) {
     const btn = btns.find(b => b.id === game.touchBtnPressed);
     if (btn) {
       ctx.save();
-      ctx.globalAlpha = 0.3;
+      ctx.globalAlpha = 0.4;
       ctx.fillStyle = '#E8D5B0';
       ctx.beginPath();
       ctx.arc(btn.x, btn.y, 32, 0, Math.PI * 2);
