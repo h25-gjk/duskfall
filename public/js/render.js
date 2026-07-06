@@ -34,7 +34,10 @@ export function render(ctx, game, cam, VW, VH) {
   // ── 家建筑 ──
   if (game.home) drawHome(ctx, game.home);
 
-  // ── 实体 (篝火/暗影) ──
+  // 地标建筑
+  if (game.landmarks) for (const lm of game.landmarks) drawLandmark(ctx, lm);
+
+  // 实体 (篝火/暗影)
   for (const e of game.entities) drawEntity(ctx, e);
 
   // ── 其他玩家 (联机) ──
@@ -154,6 +157,72 @@ function drawTile(ctx, map, resData, x, y) {
       ctx.fillRect(px + 6, py + 6, TILE - 12, TILE - 12);
       break;
     }
+    case T.DARKGRASS: {
+      // 沼泽深草: 暗绿底+深色草丛
+      ctx.fillStyle = '#1a2a18';
+      ctx.fillRect(px, py, TILE, TILE);
+      ctx.fillStyle = 'rgba(30,50,20,.4)';
+      ctx.fillRect(px + 4, py + 8, 3, 4);
+      ctx.fillRect(px + 16, py + 12, 3, 5);
+      ctx.fillRect(px + 22, py + 20, 2, 3);
+      // 水渍
+      if ((x * 3 + y * 5) % 7 === 0) {
+        ctx.fillStyle = 'rgba(30,50,80,.15)';
+        ctx.fillRect(px + 8, py + 18, 6, 3);
+      }
+      break;
+    }
+    case T.TALLGRASS: {
+      // 草原高草: 亮绿底+高草丛
+      const shade = ((x * 7 + y * 13) % 5) * 2;
+      ctx.fillStyle = `rgb(${28 + shade},${36 + shade},${24 + shade})`;
+      ctx.fillRect(px, py, TILE, TILE);
+      const sway = Math.sin(performance.now() / 600 + x + y) * 1;
+      ctx.strokeStyle = '#4a6a2a';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(px + 8, py + TILE - 4);
+      ctx.lineTo(px + 8 + sway, py + TILE - 14);
+      ctx.moveTo(px + 16, py + TILE - 4);
+      ctx.lineTo(px + 16 + sway, py + TILE - 16);
+      ctx.moveTo(px + 22, py + TILE - 4);
+      ctx.lineTo(px + 22 + sway, py + TILE - 12);
+      ctx.stroke();
+      break;
+    }
+    case T.IRON: {
+      // 铁矿: 深灰底+金属色矿石
+      ctx.fillStyle = '#2a2a30';
+      ctx.fillRect(px, py, TILE, TILE);
+      ctx.fillStyle = '#4a4a50';
+      ctx.beginPath();
+      ctx.moveTo(px + 6, py + TILE - 6);
+      ctx.lineTo(px + TILE/2 - 2, py + 4);
+      ctx.lineTo(px + TILE - 6, py + TILE - 6);
+      ctx.closePath();
+      ctx.fill();
+      // 金属高光
+      ctx.fillStyle = '#7a8a9a';
+      ctx.fillRect(px + 12, py + 12, 3, 3);
+      ctx.fillRect(px + 18, py + 16, 2, 2);
+      ctx.fillStyle = '#5a6a7a';
+      ctx.fillRect(px + 10, py + 18, 4, 3);
+      break;
+    }
+    case T.CRYSTAL: {
+      ctx.fillStyle = '#1a1a2a';
+      ctx.fillRect(px, py, TILE, TILE);
+      const t2 = performance.now() / 1000;
+      ctx.fillStyle = `rgba(180,150,220,${0.3 + 0.1 * Math.sin(t2 + x)})`;
+      ctx.beginPath();
+      ctx.moveTo(px + TILE/2, py + 4);
+      ctx.lineTo(px + TILE - 8, py + TILE/2);
+      ctx.lineTo(px + TILE/2, py + TILE - 4);
+      ctx.lineTo(px + 8, py + TILE/2);
+      ctx.closePath();
+      ctx.fill();
+      break;
+    }
   }
 
   // 装饰物
@@ -209,6 +278,25 @@ function drawTile(ctx, map, resData, x, y) {
       ctx.beginPath();
       ctx.arc(px + TILE / 2, py + TILE - 18, 13, 0, Math.PI * 2);
       ctx.fill();
+    }
+  }
+
+  if (t === T.DEADTREE && rd) {
+    // 荒地枯树: 无叶, 灰褐色
+    ctx.fillStyle = '#3a3028';
+    ctx.fillRect(px + TILE / 2 - 2, py + TILE - 12, 4, 12);
+    // 枝杈
+    ctx.strokeStyle = '#3a3028';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(px + TILE / 2, py + TILE - 14);
+    ctx.lineTo(px + TILE / 2 - 6, py + TILE - 20);
+    ctx.moveTo(px + TILE / 2, py + TILE - 12);
+    ctx.lineTo(px + TILE / 2 + 5, py + TILE - 18);
+    ctx.stroke();
+    if (rd.hp < 2) {
+      ctx.fillStyle = 'rgba(255,200,100,.2)';
+      ctx.fillRect(px + TILE / 2 - 4, py + TILE - 18, 8, 8);
     }
   }
 
@@ -348,8 +436,113 @@ function drawEntity(ctx, e) {
   }
 }
 
+function drawLandmark(ctx, lm) {
+  const t = performance.now() / 1000;
+  if (lm.type === 'camp') {
+    // 废弃营地: 破帐篷+宝箱
+    ctx.fillStyle = 'rgba(0,0,0,.25)';
+    ctx.fillRect(lm.x - 16, lm.y - 4, 32, 16);
+    // 帐篷残架
+    ctx.strokeStyle = '#4a3a2a';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(lm.x - 14, lm.y + 8);
+    ctx.lineTo(lm.x - 8, lm.y - 12);
+    ctx.lineTo(lm.x + 8, lm.y - 12);
+    ctx.lineTo(lm.x + 14, lm.y + 8);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(60,50,40,.3)';
+    ctx.beginPath();
+    ctx.moveTo(lm.x - 12, lm.y + 8);
+    ctx.lineTo(lm.x - 8, lm.y - 12);
+    ctx.lineTo(lm.x + 8, lm.y - 12);
+    ctx.lineTo(lm.x + 12, lm.y + 8);
+    ctx.closePath();
+    ctx.fill();
+    // 宝箱
+    if (!lm.opened) {
+      const bob = Math.sin(t * 2) * 1;
+      ctx.fillStyle = '#5a4a2a';
+      ctx.fillRect(lm.x - 7, lm.y - 4 + bob, 14, 10);
+      ctx.fillStyle = '#E8D5B0';
+      ctx.fillRect(lm.x - 7, lm.y - 4 + bob, 14, 2);
+      ctx.fillStyle = '#3a2a1a';
+      ctx.fillRect(lm.x - 1, lm.y - 1 + bob, 2, 4);
+      // 闪光
+      ctx.fillStyle = `rgba(232,213,176,${0.3 + 0.2 * Math.sin(t * 3)})`;
+      ctx.beginPath();
+      ctx.arc(lm.x, lm.y + bob, 12, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      // 已开启的空箱
+      ctx.strokeStyle = '#3a2a1a';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(lm.x - 7, lm.y - 4, 14, 10);
+    }
+  }
+
+  if (lm.type === 'shrine') {
+    // 古老石碑: 发光石柱
+    ctx.fillStyle = 'rgba(0,0,0,.2)';
+    ctx.beginPath();
+    ctx.ellipse(lm.x, lm.y + 12, 14, 5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // 石柱
+    ctx.fillStyle = '#3a3a48';
+    ctx.fillRect(lm.x - 6, lm.y - 16, 12, 28);
+    ctx.fillStyle = '#4a4a58';
+    ctx.fillRect(lm.x - 4, lm.y - 14, 8, 24);
+    // 顶部
+    ctx.fillStyle = '#2a2a38';
+    ctx.fillRect(lm.x - 7, lm.y - 18, 14, 4);
+    // 符文发光
+    const glow = 0.4 + 0.2 * Math.sin(t * 1.5);
+    ctx.fillStyle = `rgba(180,150,220,${glow})`;
+    ctx.fillRect(lm.x - 2, lm.y - 8, 4, 2);
+    ctx.fillRect(lm.x - 2, lm.y - 2, 4, 2);
+    ctx.fillRect(lm.x - 2, lm.y + 4, 4, 2);
+    // 光晕
+    const grad = ctx.createRadialGradient(lm.x, lm.y, 0, lm.x, lm.y, 40);
+    grad.addColorStop(0, `rgba(180,150,220,${glow * 0.2})`);
+    grad.addColorStop(1, 'rgba(180,150,220,0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(lm.x, lm.y, 40, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  if (lm.type === 'remnant') {
+    // 篝火残迹: 石圈+灰烬
+    ctx.fillStyle = '#3a3a38';
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.arc(lm.x + Math.cos(a) * 10, lm.y + Math.sin(a) * 10, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if (lm.lit) {
+      // 已点燃: 小火
+      const fl = 1 + Math.sin(t * 8) * 0.15;
+      ctx.fillStyle = '#c44';
+      ctx.beginPath();
+      ctx.arc(lm.x, lm.y, 5 * fl, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#fc8';
+      ctx.beginPath();
+      ctx.arc(lm.x, lm.y - 1, 2.5 * fl, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      // 灰烬
+      ctx.fillStyle = '#2a2a28';
+      ctx.beginPath();
+      ctx.arc(lm.x, lm.y, 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+
 function drawParticle(ctx, p) {
-  const a = p.life / p.maxLife;
+   const a = p.life / p.maxLife;
   ctx.globalAlpha = a;
   if (p.type === 'slash') {
     ctx.strokeStyle = p.color;

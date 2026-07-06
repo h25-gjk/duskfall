@@ -79,8 +79,10 @@ function sfx(type) {
 // ── 新游戏 ──
 function newGame(characterId, multiplayer = false) {
   const char = getCharacter(characterId);
-  const { map, resData, home } = generateMap();
+  const { map, resData, home, landmarks, biomeMap } = generateMap();
   game.map = map; game.resData = resData; game.home = home;
+  game.landmarks = landmarks || [];
+  game.biomeMap = biomeMap || [];
   game.mapW = MAP_W; game.mapH = MAP_H;
   game.player = {
     x: home.x, y: home.y + 20,
@@ -180,6 +182,95 @@ function tryGather() {
         game.gatherCD = 0.2; updateHUD();
         return;
       }
+      // 枯树: 给少量木材
+      if (t === T.DEADTREE && rd) {
+        rd.hp -= gatherMult;
+        sfx('chop');
+        spawnParticles(nx*TILE+TILE/2, ny*TILE+TILE/2, '#3a3028', 3);
+        game.gatherCD = 0.25;
+        if (rd.hp <= 0) {
+          p.inv.wood += 1;
+          game.map[ny][nx] = T.SAND; game.resData[ny][nx] = null;
+          sfx('pickup'); updateHUD();
+        }
+        return;
+      }
+      // 铁矿: 需要斧头才能挖
+      if (t === T.IRON && rd) {
+        if (!p.hasAxe) {
+          showToast('需要斧头才能开采铁矿', 1200);
+          game.gatherCD = 0.3;
+          return;
+        }
+        rd.hp -= gatherMult;
+        sfx('mine');
+        spawnParticles(nx*TILE+TILE/2, ny*TILE+TILE/2, '#7a8a9a', 4);
+        game.gatherCD = 0.4;
+        if (rd.hp <= 0) {
+          p.inv.stone += 2 + Math.floor(Math.random()*2);
+          game.map[ny][nx] = T.DEADROCK; game.resData[ny][nx] = null;
+          sfx('pickup');
+          showToast('获得石头 (含铁矿石)', 1500);
+          updateHUD();
+        }
+        return;
+      }
+      // 高草: 给浆果概率 + 草纤维(用wood计数)
+      if (t === T.TALLGRASS && rd) {
+        rd.hp -= 1;
+        sfx('pickup');
+        spawnParticles(nx*TILE+TILE/2, ny*TILE+TILE/2, '#4a6a2a', 2);
+        game.gatherCD = 0.15;
+        if (Math.random() < 0.3) {
+          p.inv.berry += 1;
+          showToast('在草丛中找到浆果!', 1000);
+        }
+        game.map[ny][nx] = T.GRASS; game.resData[ny][nx] = null;
+        updateHUD();
+        return;
+      }
+    }
+  }
+
+  // 检查地标交互 (宝箱/石碑/篝火残迹)
+  for (const lm of game.landmarks) {
+    const dx = lm.x - p.x, dy = lm.y - p.y;
+    if (dx*dx + dy*dy > 40*40) continue;
+
+    if (lm.type === 'camp' && !lm.opened) {
+      lm.opened = true;
+      const loot = lm.loot;
+      p.inv.wood += loot.wood;
+      p.inv.stone += loot.stone;
+      p.inv.berry += loot.berry;
+      sfx('pickup');
+      spawnParticles(lm.x, lm.y, '#E8D5B0', 8);
+      showToast(`发现宝箱! 获得 🪵${loot.wood} 🪨${loot.stone} 🍓${loot.berry}`, 2500);
+      updateHUD();
+      game.gatherCD = 0.3;
+      return;
+    }
+    if (lm.type === 'shrine' && (lm.cooldown || 0) <= 0) {
+      p.sanity = Math.min(p.maxSanity, p.sanity + 30);
+      lm.cooldown = 30;
+      sfx('pickup');
+      spawnParticles(lm.x, lm.y, '#a4c', 6);
+      showToast('古老石碑的力量恢复了你的理智 +30', 2000);
+      updateHUD();
+      game.gatherCD = 0.3;
+      return;
+    }
+    if (lm.type === 'remnant' && !lm.lit && p.inv.wood >= 1) {
+      lm.lit = true;
+      p.inv.wood -= 1;
+      // 添加为篝火实体 (光源)
+      game.entities.push({ type:'campfire', x: lm.x, y: lm.y, radius: 70, fuel: 999, flicker: 0 });
+      sfx('craft');
+      spawnParticles(lm.x, lm.y, '#e84', 5);
+      showToast('点燃了篝火残迹!', 1500);
+      updateHUD();
+      game.gatherCD = 0.3;
+      return;
     }
   }
 }
@@ -198,11 +289,45 @@ function updateCraftMenu() {
   if (!game.craftOpen) return;
   const p = game.player;
   list.innerHTML = '';
+
+  // 顶部显示当前资源
+  const resBar = document.createElement('div');
+  resBar.className = 'craft-res-bar';
+  resBar.innerHTML = `当前资源: 🪵<b>${p.inv.wood}</b> 🪨<b>${p.inv.stone}</b> 🍓<b>${p.inv.berry}</b>`;
+  list.appendChild(resBar);
+
+  // 可合成数量统计
+  let craftable = 0;
   for (const r of CRAFT_RECIPES) {
     const can = p.inv.wood >= r.wood && p.inv.stone >= r.stone;
+    if (can) craftable++;
+  }
+
+  if (craftable === 0) {
+    const tip = document.createElement('div');
+    tip.className = 'craft-tip';
+    tip.innerHTML = '💡 资源不足。用<b>E</b>键采集树木(🪵木材)和岩石(🪨石头)，天黑前至少合成一个篝火(🔥)';
+    list.appendChild(tip);
+  }
+
+  for (const r of CRAFT_RECIPES) {
+    const can = p.inv.wood >= r.wood && p.inv.stone >= r.stone;
+    const woodEnough = p.inv.wood >= r.wood;
+    const stoneEnough = p.inv.stone >= r.stone;
     const div = document.createElement('div');
-    div.className = 'craft-item' + (can ? '' : ' disabled');
-    div.innerHTML = `<div class="craft-info"><span class="craft-icon">${r.icon}</span><div><div class="craft-name">${r.name}</div><div class="craft-cost">🪵${r.wood} 🪨${r.stone} · ${r.desc}</div></div></div><span class="craft-btn">${can ? '合成' : '不足'}</span>`;
+    div.className = 'craft-item' + (can ? ' craftable' : ' disabled');
+    div.innerHTML = `<div class="craft-info">
+      <span class="craft-icon">${r.icon}</span>
+      <div>
+        <div class="craft-name">${r.name}</div>
+        <div class="craft-cost">
+          <span class="${woodEnough ? 'res-ok' : 'res-miss'}">🪵${r.wood}</span>
+          ${r.stone > 0 ? `<span class="${stoneEnough ? 'res-ok' : 'res-miss'}">🪨${r.stone}</span>` : ''}
+          · ${r.desc}
+        </div>
+      </div>
+    </div>
+    <span class="craft-btn ${can ? '' : 'btn-disabled'}">${can ? '合成' : '不足'}</span>`;
     if (can) div.addEventListener('click', () => craftItem(r));
     list.appendChild(div);
   }
@@ -411,6 +536,12 @@ function update(dt) {
   if (game.attackCD > 0) game.attackCD -= dt;
   if (game.gatherCD > 0) game.gatherCD -= dt;
   if (game.damageFlash > 0) game.damageFlash -= dt * 2;
+  // 地标冷却递减
+  if (game.landmarks) {
+    for (const lm of game.landmarks) {
+      if (lm.cooldown && lm.cooldown > 0) lm.cooldown -= dt;
+    }
+  }
 
   // 联机: 发送位置
   if (game.isMultiplayer && multiplayer.socket) {
